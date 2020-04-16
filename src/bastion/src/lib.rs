@@ -71,6 +71,7 @@ mod callbacks;
 mod child;
 mod config;
 mod macros;
+mod resizer;
 mod system;
 
 pub mod child_ref;
