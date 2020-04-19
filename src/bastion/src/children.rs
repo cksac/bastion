@@ -10,6 +10,7 @@ use crate::dispatcher::Dispatcher;
 use crate::envelope::Envelope;
 use crate::message::BastionMessage;
 use crate::path::BastionPathElement;
+use crate::resizer::Resizer;
 use crate::system::SYSTEM;
 use bastion_executor::pool;
 use futures::pending;
@@ -89,6 +90,8 @@ pub struct Children {
     started: bool,
     // List of dispatchers attached to each actor in the group.
     dispatchers: Vec<Arc<Box<Dispatcher>>>,
+    // Resizer for dynamic actor group scaling up/down.
+    resizer: Resizer,
 }
 
 impl Children {
@@ -101,6 +104,7 @@ impl Children {
         let pre_start_msgs = Vec::new();
         let started = false;
         let dispatchers = Vec::new();
+        let resizer = Resizer::default();
 
         Children {
             bcast,
@@ -111,6 +115,7 @@ impl Children {
             pre_start_msgs,
             started,
             dispatchers,
+            resizer,
         }
     }
 
@@ -315,6 +320,42 @@ impl Children {
     /// [`DispatcherHandler`]: ../dispatcher/trait.DispatcherHandler.html
     pub fn with_dispatcher(mut self, dispatcher: Dispatcher) -> Self {
         self.dispatchers.push(Arc::new(Box::new(dispatcher)));
+        self
+    }
+
+    /// Sets a custom resizer for the Children.
+    ///
+    /// This method is available only with the `scaling` feature flag.
+    ///
+    /// # Arguments
+    ///
+    /// * `resizer` - An instance of the [`Resizer`] struct.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # use bastion::prelude::*;
+    /// #
+    /// # fn main() {
+    ///     # Bastion::init();
+    ///     #
+    /// Bastion::children(|children| {
+    ///     children
+    ///         .with_resizer(
+    ///             Resizer::default()
+    ///                 .with_lower_bound(10)
+    ///                 .with_upper_bound(UpperBoundLimit::Limit(100))
+    ///         )
+    /// }).expect("Couldn't create the children group.");
+    ///     #
+    ///     # Bastion::start();
+    ///     # Bastion::stop();
+    ///     # Bastion::block_until_stopped();
+    /// # }
+    /// ```
+    /// [`Resizer`]: ../resizer/struct.Resizer.html
+    pub fn with_resizer(mut self, resizer: Resizer) -> Self {
+        self.resizer = resizer;
         self
     }
 
@@ -627,6 +668,8 @@ impl Children {
         debug!("Children({}): Launched.", self.id());
 
         loop {
+            self.resizer.scale();
+
             for (_, launched) in self.launched.values_mut() {
                 let _ = poll!(launched);
             }
@@ -665,6 +708,8 @@ impl Children {
                 Poll::Ready(None) => unreachable!(),
                 Poll::Pending => pending!(),
             }
+
+            self.resizer.scale();
         }
     }
 

@@ -7,6 +7,7 @@ use crate::children_ref::ChildrenRef;
 use crate::dispatcher::{BroadcastTarget, DispatcherType, NotificationType};
 use crate::envelope::{Envelope, RefAddr, SignedMessage};
 use crate::message::{Answer, BastionMessage, Message, Msg};
+use crate::resizer::ActorGroupStats;
 use crate::supervisor::SupervisorRef;
 use crate::system::SYSTEM;
 use futures::pending;
@@ -14,6 +15,7 @@ use qutex::{Guard, Qutex};
 use std::collections::VecDeque;
 use std::fmt::{self, Display, Formatter};
 use std::pin::Pin;
+use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -112,6 +114,7 @@ pub struct BastionContext {
 #[derive(Debug)]
 pub(crate) struct ContextState {
     messages: VecDeque<SignedMessage>,
+    stats: Arc<AtomicU64>,
 }
 
 impl BastionId {
@@ -588,6 +591,7 @@ impl ContextState {
     pub(crate) fn new() -> Self {
         ContextState {
             messages: VecDeque::new(),
+            stats: Arc::new(AtomicU64::new(0)),
         }
     }
 
@@ -597,6 +601,14 @@ impl ContextState {
 
     pub(crate) fn pop_message(&mut self) -> Option<SignedMessage> {
         self.messages.pop_front()
+    }
+
+    pub(crate) fn load_stats(&self) -> ActorGroupStats {
+        ActorGroupStats::load(self.stats.clone())
+    }
+
+    pub(crate) fn store_stats(&self, stats: ActorGroupStats) {
+        stats.store(self.stats.clone())
     }
 }
 
