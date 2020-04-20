@@ -37,7 +37,9 @@ travis-ci = { repository = "bastion-rs/bastion", branch = "master" }
 maintenance = { status = "actively-developed" }
 
 [features]
+default = []
 unstable = ["bastion-executor/unstable"]
+scaling = []
 
 [dependencies]
 bastion-executor = { version = "= 0.3.5-alpha", path = "../bastion-executor" }
