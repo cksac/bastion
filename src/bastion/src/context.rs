@@ -7,8 +7,6 @@ use crate::children_ref::ChildrenRef;
 use crate::dispatcher::{BroadcastTarget, DispatcherType, NotificationType};
 use crate::envelope::{Envelope, RefAddr, SignedMessage};
 use crate::message::{Answer, BastionMessage, Message, Msg};
-#[cfg(feature = "scaling")]
-use crate::resizer::ActorGroupStats;
 use crate::supervisor::SupervisorRef;
 use crate::system::SYSTEM;
 use futures::pending;
@@ -605,6 +603,11 @@ impl ContextState {
         self
     }
 
+    #[cfg(feature = "scaling")]
+    pub(crate) fn stats(&self) -> Arc<AtomicU64> {
+        self.stats.clone()
+    }
+
     pub(crate) fn push_message(&mut self, msg: Msg, sign: RefAddr) {
         self.messages.push_back(SignedMessage::new(msg, sign))
     }
@@ -614,13 +617,8 @@ impl ContextState {
     }
 
     #[cfg(feature = "scaling")]
-    pub(crate) fn load_stats(&self) -> ActorGroupStats {
-        ActorGroupStats::load(self.stats.clone())
-    }
-
-    #[cfg(feature = "scaling")]
-    pub(crate) fn store_stats(&self, stats: ActorGroupStats) {
-        stats.store(self.stats.clone())
+    pub(crate) fn mailbox_size(&self) -> u32 {
+        self.messages.len() as u32
     }
 }
 

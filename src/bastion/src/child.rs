@@ -6,6 +6,8 @@ use crate::child_ref::ChildRef;
 use crate::context::{BastionContext, BastionId, ContextState};
 use crate::envelope::Envelope;
 use crate::message::BastionMessage;
+#[cfg(feature = "scaling")]
+use crate::resizer::ActorGroupStats;
 use crate::system::SYSTEM;
 use bastion_executor::pool;
 use futures::pending;
@@ -15,6 +17,7 @@ use lightproc::prelude::*;
 use lightproc::proc_state::EmptyProcState;
 use qutex::Qutex;
 use std::fmt::{self, Debug, Formatter};
+use std::fs::read_to_string;
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
@@ -269,11 +272,35 @@ impl Child {
         }
     }
 
+    #[cfg(feature = "scaling")]
+    async fn update_stats(&mut self) {
+        let guard = match self.state.clone().lock_async().await {
+            Ok(guard) => guard,
+            Err(err) => {
+                debug!(
+                    "Child({:?}) Can't update stats. Reason: {:?}",
+                    self.bcast.id(),
+                    err
+                );
+                return;
+            }
+        };
+        let context_state = guard.as_ref();
+        let storage = guard.stats();
+
+        let mut stats = ActorGroupStats::load(storage.clone());
+        stats.update_average_mailbox_size(context_state.mailbox_size());
+        stats.store(storage);
+    }
+
     async fn run(mut self) {
         debug!("Child({}): Launched.", self.id());
         self.register_in_dispatchers();
 
         loop {
+            #[cfg(feature = "scaling")]
+            self.update_stats().await;
+
             match poll!(&mut self.bcast.next()) {
                 // TODO: Err if started == true?
                 Poll::Ready(Some(Envelope {
@@ -314,6 +341,9 @@ impl Child {
                 Poll::Ready(None) => unreachable!(),
                 Poll::Pending => (),
             }
+
+            #[cfg(feature = "scaling")]
+            self.update_stats().await;
 
             if !self.started {
                 pending!();
