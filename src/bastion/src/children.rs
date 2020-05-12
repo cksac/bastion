@@ -683,11 +683,13 @@ impl Children {
     async fn autoresize_group(&mut self) {
         match self.resizer.scale(&self.launched).await {
             ScalingRule::Upscale(count) => {
+                println!("Upscale. Add {} more", count);
                 for _ in 0..count {
                     self.launch_child();
                 }
             }
             ScalingRule::Downscale(actors_to_shutdown) => {
+                println!("Downscale. Dropping {:?} more", actors_to_shutdown);
                 for id in actors_to_shutdown {
                     self.drop_child(&id);
                 }
@@ -695,6 +697,11 @@ impl Children {
             ScalingRule::DoNothing => {}
         }
 
+        println!(
+            "Children({}) Actors: {:?}",
+            self.bcast.id(),
+            self.launched.len()
+        );
         self.update_actors_count_stats();
     }
 

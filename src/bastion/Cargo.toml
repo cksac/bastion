@@ -37,7 +37,7 @@ travis-ci = { repository = "bastion-rs/bastion", branch = "master" }
 maintenance = { status = "actively-developed" }
 
 [features]
-default = []
+default = ["scaling"]
 unstable = ["bastion-executor/unstable"]
 scaling = []
 
